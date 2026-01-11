@@ -1,5 +1,6 @@
 streamlit
 demucs
 pydub
-torch==2.2.0
-torchaudio==2.2.0
+numpy<2.0.0
+torch
+torchaudio
