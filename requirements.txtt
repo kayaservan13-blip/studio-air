@@ -1,4 +1,6 @@
 streamlit
 demucs
 pydub
+numpy<2.0.0
 torch
+torchaudio
