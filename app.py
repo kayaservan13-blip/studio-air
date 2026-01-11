@@ -4,80 +4,88 @@ import subprocess
 from pydub import AudioSegment
 import shutil
 
-# Sayfa Ayarları
+# --- Sayfa Ayarları ---
 st.set_page_config(page_title="Studio Air", page_icon="🎧")
 
 st.title("Studio Air ♾️")
 st.markdown("Professional Stem Separation & Audio Lab")
 
-# 1. SİSTEM KONTROLÜ (Hata kaynağını bulur)
+# --- 1. SİSTEM KONTROLÜ ---
+# FFmpeg yüklü mü diye bakar. Yoksa uyarı verir.
 if shutil.which("ffmpeg") is None:
-    st.error("🚨 KRİTİK HATA: FFmpeg yüklü değil! Lütfen 'packages.txt' dosyasına 'ffmpeg' yazdığınızdan ve Reboot ettiğinizden emin olun.")
+    st.error("🚨 HATA: Sunucuda FFmpeg bulunamadı! Lütfen 'packages.txt' dosyasına 'ffmpeg' yazdığınızdan ve uygulamayı Reboot ettiğinizden emin olun.")
     st.stop()
 
-# Dosya Yükleme Alanı
-uploaded_file = st.file_uploader("Müzik dosyasını buraya sürükleyin", type=["mp3", "wav", "m4a", "ogg", "flac"])
+# --- 2. DOSYA YÜKLEME ---
+uploaded_file = st.file_uploader("Müzik dosyasını buraya sürükleyin (BandLab, MP3, WAV, M4A...)", type=["mp3", "wav", "m4a", "ogg", "flac"])
 
 if uploaded_file is not None:
-    # 2. GÜVENLİ OYNATICI
-    st.audio(uploaded_file, format='audio/mp3')
+    # Oynatıcıyı göster
+    st.audio(uploaded_file)
 
     if st.button("✨ SİHRİ BAŞLAT"):
         status_text = st.empty()
-        status_text.info("🛠️ Dosya hazırlanıyor ve dönüştürülüyor...")
+        status_text.info("🛠️ Dosya güvenli formata çevriliyor...")
 
-        # Klasörleri temizle/oluştur
+        # Klasörleri oluştur
         if not os.path.exists("temp"):
             os.makedirs("temp")
         if not os.path.exists("output"):
             os.makedirs("output")
 
-        # 3. HER FORMATI KABUL EDEN DÖNÜŞTÜRÜCÜ
-        # Ne format gelirse gelsin, önce güvenli WAV formatına çeviriyoruz.
+        # --- 3. GÜVENLİ DÖNÜŞTÜRME ---
+        # Dosya ne olursa olsun, Demucs'un sevdiği WAV formatına çeviriyoruz.
         try:
             audio = AudioSegment.from_file(uploaded_file)
             audio.export("temp/input_safe.wav", format="wav")
         except Exception as e:
-            st.error(f"Dosya okunamadı! Hata: {e}")
+            st.error(f"Dosya okunamadı! Hata detayı: {e}")
             st.stop()
 
-        status_text.info("🚀 Yapay zeka sesi ayırıyor (Bu işlem 30-60 saniye sürebilir)...")
+        status_text.info("🚀 Yapay zeka sesi ayırıyor (Bu işlem 1-2 dakika sürebilir, lütfen bekleyin)...")
         
-        # Demucs Komutu (Standart ve Güvenli)
+        # --- 4. AYIRMA İŞLEMİ (RAM DOSTU MOD) ---
+        # '-j 0' komutu sunucunun çökmesini engeller.
         command = [
             "demucs",
-            "-n", "htdemucs",      # Model
-            "--two-stems=vocals",  # Sadece Vokal ve Müzik olarak ayır
-            "temp/input_safe.wav", # Dönüştürdüğümüz güvenli dosya
-            "-o", "output"
+            "-n", "htdemucs",      # Model Adı
+            "--two-stems=vocals",  # Sadece Vokal ve Müzik
+            "-j", "0",             # <--- KRİTİK: Tek işlemci modu (Çökmeyi önler)
+            "temp/input_safe.wav", # Giriş dosyası
+            "-o", "output"         # Çıkış klasörü
         ]
 
-        # İşlemi Başlat
+        # Komutu çalıştır
         process = subprocess.run(command, capture_output=True, text=True)
 
         if process.returncode != 0:
-            st.error("İşlem Başarısız Oldu!")
-            st.code(process.stderr) # Hatanın ne olduğunu ekrana yazar
+            st.error("İşlem sırasında bir hata oluştu!")
+            st.code(process.stderr) # Hata detayını göster
         else:
-            status_text.success("✅ İşlem Tamamlandı!")
+            status_text.success("✅ İşlem Başarıyla Tamamlandı!")
             
-            # Dosyaları Bul
-            # Demucs çıktısı: output/htdemucs/input_safe/vocals.wav
+            # --- 5. SONUÇLARI GÖSTER ---
+            # Demucs çıktı yolu: output/htdemucs/input_safe/vocals.wav
             base_path = "output/htdemucs/input_safe"
             
-            if os.path.exists(f"{base_path}/vocals.wav"):
+            # Dosyaların varlığını kontrol et
+            if os.path.exists(base_path):
                 col1, col2 = st.columns(2)
                 
                 with col1:
                     st.markdown("### 🎤 Vokal")
-                    st.audio(f"{base_path}/vocals.wav")
-                    with open(f"{base_path}/vocals.wav", "rb") as f:
-                        st.download_button("Vokali İndir", f, file_name="vokal.wav", mime="audio/wav")
+                    vocal_path = f"{base_path}/vocals.wav"
+                    if os.path.exists(vocal_path):
+                        st.audio(vocal_path)
+                        with open(vocal_path, "rb") as f:
+                            st.download_button("Vokali İndir", f, file_name="vokal.wav", mime="audio/wav")
 
                 with col2:
                     st.markdown("### 🎹 Müzik (Altyapı)")
-                    st.audio(f"{base_path}/no_vocals.wav")
-                    with open(f"{base_path}/no_vocals.wav", "rb") as f:
-                        st.download_button("Müziği İndir", f, file_name="altyapi.wav", mime="audio/wav")
+                    music_path = f"{base_path}/no_vocals.wav"
+                    if os.path.exists(music_path):
+                        st.audio(music_path)
+                        with open(music_path, "rb") as f:
+                            st.download_button("Müziği İndir", f, file_name="altyapi.wav", mime="audio/wav")
             else:
-                st.error("Dosyalar ayrıldı ama bulunamadı. Lütfen tekrar deneyin.")
+                st.warning("İşlem bitti ama dosyalar bulunamadı. Lütfen tekrar deneyin.")
