@@ -9,7 +9,7 @@ st.set_page_config(page_title="Studio Air", page_icon="🎧")
 
 st.title("Studio Air ♾️")
 st.markdown("### Professional Stem Separation & Audio Lab")
-st.caption("v2.1 - Low Memory Mode Active")
+st.caption("v3.0 - Stable Mode")
 
 # --- 1. SİSTEM KONTROLÜ ---
 if shutil.which("ffmpeg") is None:
@@ -33,23 +33,27 @@ if uploaded_file is not None:
         status_box.write("🔄 Dosya güvenli formata (WAV) çevriliyor...")
         try:
             audio = AudioSegment.from_file(uploaded_file)
-            # Dosyayı 2 dakikadan uzunsa kırpabiliriz (RAM koruması için opsiyonel, şimdilik tam yapıyoruz)
+            # Dosyayı max 4 dakika ile sınırla (RAM çökmesini önlemek için)
+            # Eğer şarkı 4 dakikadan uzunsa sadece ilk 4 dakikayı alır.
+            if len(audio) > 240000:
+                audio = audio[:240000]
+                st.warning("⚠️ RAM koruması için şarkının sadece ilk 4 dakikası işlenecek.")
+                
             audio.export("temp/input_safe.wav", format="wav")
         except Exception as e:
             status_box.update(label="❌ Dosya okuma hatası!", state="error")
             st.error(f"Hata detayı: {e}")
             st.stop()
 
-        status_box.write("🚀 Yapay zeka motoru çalışıyor (Bu işlem yavaş ama güvenlidir)...")
+        status_box.write("🚀 Yapay zeka motoru çalışıyor (Lütfen bekleyin)...")
         
-        # --- 4. AYIRMA İŞLEMİ (ULTRA RAM KORUMA MODU) ---
+        # --- 4. AYIRMA İŞLEMİ (KESİN ÇALIŞAN MODEL) ---
+        # 'htdemucs' yerine 'mdx_extra_q' kullanıyoruz. Bu model RAM dostudur ve segment hatası vermez.
         command = [
             "demucs",
-            "-n", "htdemucs",       # Model
+            "-n", "mdx_extra_q",    # <--- DEĞİŞİKLİK: Daha hafif ve hızlı model
             "--two-stems=vocals",   # Sadece Vokal/Müzik
-            "-j", "0",              # Tek işlemci kullan (Çökme önleyici)
-            "-d", "cpu",            # Sadece CPU kullan
-            "--segment", "10",      # <--- YENİ: Şarkıyı 10 saniyelik dilimlerle işle (RAM tasarrufu)
+            "-j", "0",              # Tek işlemci
             "temp/input_safe.wav",
             "-o", "output"
         ]
@@ -59,15 +63,15 @@ if uploaded_file is not None:
 
         if process.returncode != 0:
             status_box.update(label="❌ İşlem Başarısız!", state="error")
-            st.error("Sunucu işlemi tamamlayamadı (RAM yetersizliği olabilir).")
-            # Hatayı gizle/göster
+            st.error("İşlem tamamlanamadı.")
             with st.expander("Teknik Hata Detayı"):
                 st.code(process.stderr)
         else:
             status_box.update(label="✅ İşlem Tamamlandı!", state="complete")
             
             # --- 5. SONUÇLARI GÖSTER ---
-            base_path = "output/htdemucs/input_safe"
+            # Model değiştiği için klasör yolu da değişir: output/mdx_extra_q/...
+            base_path = "output/mdx_extra_q/input_safe"
             
             col1, col2 = st.columns(2)
             with col1:
